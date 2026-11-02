@@ -109,14 +109,15 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - Save: `php artisan route:list --json > docs/upgrade/baseline/routes.json`, `composer show --format=json > docs/upgrade/baseline/packages.json`, `composer audit --format=json > docs/upgrade/baseline/audit.json` (pre-existing advisories; the gate compares against this file). Capture framework info in `about.txt`: run `php artisan about > docs/upgrade/baseline/about.txt` on Laravel 8+, or `php artisan --version > docs/upgrade/baseline/about.txt` when `about` is unavailable on Laravel 6–7. Record any other command failure and halt.
 
 **0.4 Compatibility matrix**
-- Do not fetch upgrade guides in bulk. Instead, fetch `https://laravel.com/docs/{N}.x/upgrade` on-demand when upgrading to version N (in the version loop, step 1.3). Save to `docs/upgrade/guides/N.md`. Record the PHP minimum per version.
-- For each direct package in `composer.json`, query Packagist for a release that supports the target Laravel and PHP versions. Write `docs/upgrade/00-preflight.md`.
-- Collect all packages with no supporting release. For each:
+- Do not fetch upgrade guides in bulk. Instead, fetch `https://laravel.com/docs/{N}.x/upgrade` on-demand when upgrading to version N (in the version loop, step C). Save to `docs/upgrade/guides/N.md`. Record the PHP minimum per version.
+- For each direct package in `composer.json`, query Packagist for a release that supports `current_version` (the first Laravel version to be upgraded to, = `baseline_major + 1`) and the PHP minimum for that version. Write `docs/upgrade/00-preflight.md`.
+- Collect all packages with no supporting release for `current_version`. For each:
   - Query Packagist for `abandoned` field and suggested replacement.
   - `grep -r <vendor>/<pkg>` in `app/ config/ routes/ resources/views/` to count files touched. Classify risk: **high** (auth, token, model traits, guards), **medium** (facades, helpers, middleware), **low** (utilities).
   - If it has a migration in "Package migrations", record it as `migration-pending`.
   - Record in state.json under `incompatible_packages`: `[{name, abandoned, replaced_by, risk, files_touched, migration_pending}]`.
 - Halt with the full list. User decides per package: fork, migrate (if `migration_pending`), skip, or replace. Re-run after each decision (add resolved package to `state.json.resolved_packages` with action and notes).
+- **Note:** Incompatible packages found for `current_version` may regain compatibility in later versions (e.g., a package dropped support in 8 but restored it in 9 or later). These are recorded; per-version compatibility is re-checked during each version's upgrade loop when that version is entered (step D), not predicted in advance.
 
 ### 0.4 parallel orchestration (Package fan-out only)
 
@@ -154,6 +155,8 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Read `docs/upgrade/guides/N.md`. Build a checklist of "Breaking Changes" and required file changes in `docs/upgrade/N-laravel-N.md` under "Official guide checklist". Mark each item `applies` or `n/a` with a reason.
 
 ### D. Packages
+- Determine the PHP minimum for N from the current guide. Query Packagist for every direct package's releases compatible with both Laravel N and that PHP version; do not reuse the 0.4 result without re-checking.
+- If any direct package has no compatible release for Laravel N, halt before changing dependencies. Record the complete package list, compatibility evidence, and suggested action in `state.json` and the version doc. User decides: fork, migrate, skip, or replace.
 - `composer outdated --direct --format=json`.
 - For each direct package needing change for N: `composer require vendor/pkg:^X -W` (one at a time). Commit `composer.json` and `composer.lock`: `chore(upgrade): deps for laravel-N`.
 - `composer audit` must not report new advisories. If it does, record them and halt unless the user approved.
