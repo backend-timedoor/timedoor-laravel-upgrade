@@ -177,12 +177,14 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - If a required change needs logic changes, record under "Needs manual review" and do not edit.
 
 ### G. Scan, fix, test
-1. Static analysis (parallel):
-   - Launch two agents:
+1. Static analysis:
+   - For each missing deferred tool from 0.5, attempt installation now as a dev dependency, one tool at a time. Record every command and result. Do not change existing tool configuration.
+   - If installation fails because of a dependency or SemVer conflict, log the conflict for version N and continue without that tool. Any other installation failure halts.
+   - Launch parallel agents only for tools available after this check:
      - **PHPStan agent:** Run `vendor/bin/phpstan analyse app config routes --error-format=json > docs/upgrade/logs/phpstan-N.json`. Writes only the JSON output. Treats errors as data; no editing.
      - **Rector agent:** Run `vendor/bin/rector process --dry-run --output-format=json > docs/upgrade/logs/rector-N.json`. Writes only the JSON output. No edits, no suggestions.
    - Both agents read the same `app/`, `config/`, `routes/` snapshots (no mutations during analysis). No `state.json` writes.
-   - The main flow waits for both, reads both output files, records new PHPStan errors against `upgrade/baseline`, and prepares Rector proposals.
+   - The main flow waits for launched agents, reads available output files, records new PHPStan errors against `upgrade/baseline`, and prepares Rector proposals. Missing-tool conflicts are documented as skipped analysis, not failures.
 2. Apply only Rector proposals that are pure renames listed in the guide. Commit: `fix(laravel-N): renames`.
 3. Test gate: `php artisan test`.
    - Fail: `versions[N].retries += 1`. If retries < 2, go to step 1 with the failure output as context. Else halt.
