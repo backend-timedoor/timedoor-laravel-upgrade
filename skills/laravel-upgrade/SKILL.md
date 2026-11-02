@@ -139,7 +139,9 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Guides are not fetched or merged here; they are fetched on-demand when upgrading to each version (step 1.3).
 
 **0.5 Dev tools**
-- Install `larastan/larastan`, `rector/rector` as dev dependencies only if absent. Record in the command log. Do not change tool config that already exists.
+- Attempt to install `larastan/larastan`, `rector/rector` as dev dependencies only if absent. Record in the command log. Do not change tool config that already exists.
+- If either tool fails to install due to dependency conflicts with the baseline Laravel version (e.g., larastan requires SemVer ^3.0 but Laravel 7 locks ^1.5), do not block: skip them in phase 0 and install per-version during each version's G.1 (static analysis phase). Log the conflict and reason for deferral.
+- If the tool installs, continue. If it fails for another reason (not a SemVer/dep conflict), halt with the error and ask the user to resolve it manually.
 
 ## Per-version loop (N = current_version … 13)
 
