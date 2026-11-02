@@ -1,0 +1,10 @@
+{
+  "name": "laravel-upgrade",
+  "version": "1.0.0",
+  "description": "Automated incremental Laravel 6→13 and PHP→8.4 upgrade with official-guide checks, test gates, and a generated change report.",
+  "author": {
+    "name": "Timedoor Engineering"
+  },
+  "license": "MIT",
+  "keywords": ["laravel", "php", "upgrade", "migration"]
+}
