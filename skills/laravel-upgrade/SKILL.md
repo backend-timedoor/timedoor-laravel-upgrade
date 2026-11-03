@@ -30,6 +30,7 @@ Verify flags with `claude --help` before scheduling unattended runs.
 8. If a rule conflicts with the official guide, the guide wins for framework structure only. Log the deviation. Business logic rules still apply.
 9. Package upgrades and downgrades needed for the Laravel upgrade are allowed without asking: `composer require vendor/pkg:^X -W` and `composer update` may move a package up or down to a release that supports the target. Ask only for the **decisions required** listed under "Package decisions" below.
 10. Before any incompatible-package workaround or change expected to affect many files, identify every affected feature and its existing tests. If coverage is missing, first write characterization tests for the current behavior. Run the complete affected-feature test set and make it pass before changing code. After the change, run the same test set; compare failures against the intended compatibility change and record the result. Never replace characterization tests with new post-change-only tests.
+11. Commit gate: stage only intended files. Before every commit, run `git diff --cached --stat` and show the diff summary. Verify no user-excluded paths are staged. Do not commit until the relevant test gate and route verification pass. If tests fail or user rejects staged files, leave uncommitted and halt or retry. Never use `git add app/` or broad staging when only specific files belong in the commit. Show staged changes and ask user approval before running `git commit`.
 
 ## ALLOWED_TOOLS
 
@@ -168,19 +169,19 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 ### D. Packages
 - Determine the PHP minimum for N from the current guide. Fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` through `WebFetch(domain:packagist.org)` for every direct package; evaluate all releases compatible with both Laravel N and that PHP version. Do not rely on the latest-release page or reuse the 0.4 result without re-checking.
 - `composer outdated --direct --format=json`.
-- For each direct package needing change for N (upgrade or downgrade to the release that supports N and the PHP minimum): `composer require vendor/pkg:^X -W` (one at a time). No confirmation needed. Commit `composer.json` and `composer.lock`: `chore(upgrade): deps for laravel-N`.
+- For each direct package needing change for N (upgrade or downgrade to the release that supports N and the PHP minimum): `composer require vendor/pkg:^X -W` (one at a time). No confirmation needed. Keep `composer.json` and `composer.lock` unstaged until the test and verification gates pass.
 - If a direct package has no compatible release for Laravel N, halt before changing dependencies. Record the package, compatibility evidence, and suggested action in `state.json` and the version doc. User decides: fork, migrate, skip, or replace.
 - `composer audit` must not report new advisories. If it does, record them and halt unless the user approved.
 
 ### E. Framework
 - Set `laravel/framework` to `^N.0` in `composer.json`. Run `composer update laravel/framework -W`.
-- Commit: `upgrade(laravel-N): framework`.
+- Keep framework changes unstaged until the test and verification gates pass.
 
 ### F. Guide-driven file changes
 - Apply only the file changes the guide lists (config keys, bootstrap/middleware structure, `.env.example` keys, renamed facades/helpers).
 - Method: compare the framework's new skeleton file for N with the project's file. Change only structural lines the guide names. Keep all project-specific code unchanged.
 - Each file changed: note in the doc with reason and "business logic touched: no".
-- Commit: `upgrade(laravel-N): guide changes`.
+- Keep guide changes unstaged until the test and verification gates pass.
 - If a required change needs logic changes, record under "Needs manual review" and do not edit.
 
 ### G. Scan, fix, test
@@ -192,18 +193,18 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
      - **Rector agent:** Run `vendor/bin/rector process --dry-run --output-format=json > docs/upgrade/logs/rector-N.json`. Writes only the JSON output. No edits, no suggestions.
    - Both agents read the same `app/`, `config/`, `routes/` snapshots (no mutations during analysis). No `state.json` writes.
    - The main flow waits for launched agents, reads available output files, records new PHPStan errors against `upgrade/baseline`, and prepares Rector proposals. Missing-tool conflicts are documented as skipped analysis, not failures.
-2. Apply only Rector proposals that are pure renames listed in the guide. Commit: `fix(laravel-N): renames`.
-3. Test gate: `php artisan test`.
+2. Apply only Rector proposals that are pure renames listed in the guide. Keep rename changes unstaged until the test and verification gates pass.
+3. Test gate: `php artisan test`. No commit is allowed before this passes.
    - Fail: `versions[N].retries += 1`. If retries < 2, go to 1 (static analysis) with the failure output as context. Else halt.
    - Pass: continue.
-4. Verification diff:
+4. Verification diff. No commit is allowed until this passes:
    - `php artisan route:list --json` → compare with `docs/upgrade/baseline/routes.json`.
    - Every removed or changed route must match an entry in the guide checklist or be listed under "Needs manual review". Otherwise halt.
 
 ### H. Document
 - Fill `docs/upgrade/N-laravel-N.md` from the template below.
 - Run `PHP_BINARY=<php-binary> python3 <skill-base-dir>/scripts/make_report.py --version N`. `<skill-base-dir>` is the "Base directory for this skill" shown when this skill loads. The script runs from the app root and writes to `docs/upgrade/`. It writes the file tables from git and logs. You fill only the narrative fields (`Summary notes`, `Manual review`).
-- Commit: `docs(laravel-N): upgrade report`.
+- After the test and route verification gates pass, update state and generate the report. Stage only intended files, review the cached diff, ask user approval, then commit `upgrade(laravel-N): Laravel N verified`.
 
 ### I. Finish version
 - Before marking passed: `composer show laravel/framework` must report major N. Mismatch → halt.
