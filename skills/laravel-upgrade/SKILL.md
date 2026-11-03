@@ -121,7 +121,7 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
   - If it has a migration in "Package migrations", record it as `migration-pending`.
   - Record in state.json under `incompatible_packages`: `[{name, abandoned, replaced_by, risk, files_touched, migration_pending}]`.
 - Packages with a compatible release (up or down) are resolved automatically in D. Record the chosen version in `00-preflight.md`.
-- Halt only with the packages that need a critical confirmation (see "Package decisions"). User decides per package: fork, migrate (if `migration_pending`), skip, or replace. Re-run after each decision (add resolved package to `state.json.resolved_packages` with action and notes).
+- Halt only with the packages that need a critical confirmation (see "Package decisions"). User decides per package: fork, rebuild, migrate (if `migration_pending`), skip, replace, skip_until, or replace_until. Re-run after each decision; add the decision to `state.json.resolved_packages` with action, optional `action_package`, optional `until_version`, and notes.
 - **Note:** Incompatible packages found for `current_version` may regain compatibility in later versions (e.g., a package dropped support in 8 but restored it in 9 or later). These are recorded; per-version compatibility is re-checked during each version's upgrade loop when that version is entered (step D), not predicted in advance.
 
 ### 0.4 parallel orchestration (Package fan-out only)
@@ -227,8 +227,9 @@ When a package has no supporting release for the target Laravel version:
   "resolved_packages": [
     {
       "name": "vendor/package",
-      "action": "fork|migrate|skip|replace",
+      "action": "fork|rebuild|migrate|skip|replace|skip_until|replace_until",
       "action_package": "vendor/replacement" | null,
+      "until_version": "N" | null,
       "notes": "user notes"
     }
   ]
@@ -247,11 +248,14 @@ Critical confirmation (halt, user decides per package):
 
 User decides. Actions:
 - **fork:** Maintain a local fork or abandoned version. Skill resumes after you document it in `composer.json`.
+- **rebuild:** Replace the package with in-app code. Triggers rule 10: characterization tests before, rerun after change. High risk; requires explicit commitment to maintain the replacement. Skill resumes after you confirm the rebuild is complete and tested.
 - **migrate:** Only if `migration_pending: true`. Skill applies the migration on next run (Phase F).
-- **skip:** Accept incompatibility. Skill records in report and continues.
-- **replace:** Switch to `action_package` in `composer.json`. Skill resumes.
+- **skip:** Accept incompatibility for this version and all future versions. Skill records in report and continues.
+- **replace:** Switch to `action_package` in `composer.json` for this version and all future versions. Skill resumes.
+- **skip_until:** Accept incompatibility through version N. Skill re-checks and halts again at N for a fresh decision. Set `until_version: N` in `state.json`.
+- **replace_until:** Switch to `action_package` through version N. Skill re-checks and halts again at N for a fresh decision. Set `until_version: N` in `state.json`.
 
-Skill never auto-migrates without user decision.
+Skill never auto-migrates without user decision. At the start of each version loop, if any package has `until_version <= current_version`, halt to ask for renewal of that decision.
 
 ## Per-version doc template
 
@@ -326,7 +330,7 @@ When the skill is halted or stopped, output to the user in JSON format (always, 
   "version": "N (the version at halt) or null if before version loop",
   "substep": "X (the substep letter) or null",
   "decision_needed": {
-    "category": "package|guide|test|env|route|audit|other",
+    "category": "package|package_expired|guide|test|env|route|audit|other",
     "description": "one-line summary of what the user must decide",
     "context": "full evidence from state.json halt.evidence or logs"
   },
