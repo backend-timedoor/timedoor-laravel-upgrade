@@ -313,7 +313,42 @@ Halt on any of:
 - Unexpected route removal/change not in the guide.
 - Any non-zero exit from `git` or `composer` not listed as expected.
 
-On halt: write `state.json` `halt` object, run `make_report.py --final` (marked halted), stop. Do not try alternative commands to bypass a halt.
+On halt: write `state.json` `halt` object, run `make_report.py --final` (marked halted), generate decision output (see "Decision output"), stop. Do not try alternative commands to bypass a halt.
+
+## Decision output
+
+When the skill is halted or stopped, output to the user in JSON format (always, whether halted by the skill or by the user stopping it):
+
+```json
+{
+  "status": "halted|done",
+  "reason": "reason from state.json halt object or stop reason",
+  "version": "N (the version at halt) or null if before version loop",
+  "substep": "X (the substep letter) or null",
+  "decision_needed": {
+    "category": "package|guide|test|env|route|audit|other",
+    "description": "one-line summary of what the user must decide",
+    "context": "full evidence from state.json halt.evidence or logs"
+  },
+  "next_action": "instruction from state.json halt.next or the skill's recommendation"
+}
+```
+
+Example:
+```json
+{
+  "status": "halted",
+  "reason": "Package incompatibility with Laravel 9",
+  "version": "9",
+  "substep": "D",
+  "decision_needed": {
+    "category": "package",
+    "description": "spatie/laravel-permission v5 does not support Laravel 9; v6.0 conflicts with php < 8.1",
+    "context": "composer show spatie/laravel-permission output and support matrix"
+  },
+  "next_action": "Fork to v5, migrate to v6 after PHP 8.1 upgrade, or replace with alternatives/custom auth"
+}
+```
 
 ## Done
 
