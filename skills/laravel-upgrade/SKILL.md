@@ -262,6 +262,21 @@ User decides. Actions:
 
 Skill never auto-migrates without user decision. At the start of each version loop, if any package has `until_version <= current_version`, halt to ask for renewal of that decision.
 
+## Mapping to decision output
+
+When outputting JSON on halt, transform `state.json incompatible_packages` to `decision_needed.items` as follows:
+
+| State field | Output field | Logic |
+|------------|-------------|-------|
+| `name` | `name` | direct |
+| `abandoned` | part of `problem` | if true: "Abandoned; ..." else: "No release for Laravel N" |
+| `replaced_by` | `action_package` | direct if present; `options` always includes `replace` when set |
+| `risk`, `files_touched`, `migration_pending` | `evidence` | combine: "X files touched (Y risk). Migration pending: Z." |
+| — | `options` | base: `["fork", "rebuild", "skip"]`; add `"migrate"` if `migration_pending: true`; add `"replace"` if `replaced_by` is set; for abandoned packages with `replaced_by`, remove `"fork"` and `"rebuild"`. |
+| — | `suggested` | if `abandoned` and `replaced_by`: `"replace"`; else if `migration_pending`: `"migrate"`; else if `risk: "high"`: `"fork"`; else: `"skip"` |
+
+Use the same logic to validate user input: reject actions not in the mapped `options` list.
+
 ## Per-version doc template
 
 ```markdown
@@ -337,25 +352,73 @@ When the skill is halted or done, output to the user in JSON format. This is the
   "decision_needed": {
     "category": "package|package_expired|guide|test|env|route|audit|other",
     "description": "one-line summary of what the user must decide",
-    "context": "full evidence from state.json halt.evidence or logs"
+    "context": "full evidence from state.json halt.evidence or logs",
+    "items": [
+      {
+        "name": "vendor/pkg (or other item name)",
+        "problem": "no release for Laravel N | abandoned | ...",
+        "evidence": "release range checked, abandoned flag, replaced_by, files_touched, risk",
+        "options": ["fork", "rebuild", "migrate", "skip", "replace", "skip_until", "replace_until"],
+        "suggested": "one of options, from state.json",
+        "action_package": "vendor/replacement or null"
+      }
+    ]
+  },
+  "auto_resolved": [
+    "vendor/pkg ^X (compatible release chosen automatically; no decision)"
+  ],
+  "resume_with": {
+    "vendor/pkg": "one of options, copied per item"
   },
   "next_action": "instruction from state.json halt.next or the skill's recommendation"
 }
 ```
 
+Rules:
+- `decision_needed.items` lists ONLY packages awaiting a user choice. One entry per package. Never mix in packages that resolve automatically.
+- `auto_resolved` lists packages upgraded or downgraded automatically to a compatible release. Omit the field when empty.
+- `resume_with` is a template of the exact answers the user returns, one key per item in `decision_needed.items`. Keys must match `name` values exactly.
+- Output this JSON only (no prose), per the rule above.
+
 Example:
 ```json
 {
   "status": "halted",
-  "reason": "Package incompatibility with Laravel 9",
-  "version": "9",
+  "reason": "Laravel 10 package compatibility review found 2 packages needing a decision.",
+  "version": "10",
   "substep": "D",
   "decision_needed": {
     "category": "package",
-    "description": "spatie/laravel-permission v5 does not support Laravel 9; v6.0 conflicts with php < 8.1",
-    "context": "composer show spatie/laravel-permission output and support matrix"
+    "description": "Choose fork, rebuild, replace, or skip for 2 incompatible packages.",
+    "context": "Full evidence in docs/upgrade/00-preflight.md and state.json incompatible_packages.",
+    "items": [
+      {
+        "name": "jenssegers/agent",
+        "problem": "No Laravel 10-compatible release (latest supports ^9.0)",
+        "evidence": "Checked all releases; highest Laravel constraint ^9.0. Files touched: 4 (medium).",
+        "options": ["fork", "rebuild", "skip"],
+        "suggested": "fork",
+        "action_package": null
+      },
+      {
+        "name": "fideloper/proxy",
+        "problem": "Abandoned; functionality built into Laravel framework",
+        "evidence": "abandoned: true; replaced_by suggestion present. Files touched: 1 (low).",
+        "options": ["skip", "replace"],
+        "suggested": "replace",
+        "action_package": null
+      }
+    ]
   },
-  "next_action": "Fork to v5, migrate to v6 after PHP 8.1 upgrade, or replace with alternatives/custom auth"
+  "auto_resolved": [
+    "laravel/framework ^10.0",
+    "doctrine/dbal ^3.0"
+  ],
+  "resume_with": {
+    "jenssegers/agent": "fork",
+    "fideloper/proxy": "replace"
+  },
+  "next_action": "Reply with resume_with filled in. Re-run the skill after all items are answered."
 }
 ```
 
