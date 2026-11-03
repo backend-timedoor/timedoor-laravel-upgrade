@@ -116,6 +116,7 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - Do not fetch upgrade guides in bulk. Instead, fetch `https://laravel.com/docs/{N}.x/upgrade` on-demand when upgrading to version N (in the version loop, step C). Save to `docs/upgrade/guides/N.md`. Record the PHP minimum per version.
 - For each direct package in `composer.json`, fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` to get all releases (not just latest). Find a release that supports `current_version` (the first Laravel version to be upgraded to, = `baseline_major + 1`) and the PHP minimum for that version. Write `docs/upgrade/00-preflight.md`.
 - Collect all packages with no supporting release for `current_version`. For each:
+  - Use the complete p2 metadata to determine the package's supported Laravel version range: inspect every release's `require` constraints, identify the highest and lowest Laravel versions supported, and record the exact compatible release/version constraints for the current Laravel version if one exists. Do not label a package unsupported until this check is complete.
   - Check the p2 metadata for `abandoned` field and `replace` suggestion.
   - `grep -r <vendor>/<pkg>` in `app/ config/ routes/ resources/views/` to count files touched. Classify risk: **high** (auth, token, model traits, guards), **medium** (facades, helpers, middleware), **low** (utilities).
   - If it has a migration in "Package migrations", record it as `migration-pending`.
