@@ -341,85 +341,45 @@ On halt: write `state.json` `halt` object, run `make_report.py --final` (marked 
 
 ## Decision output
 
-When the skill is halted or done, output to the user in JSON format. This is the only output format for a halt: no prose summary replaces it, and it applies whether the skill halted itself or the user stopped it:
+When the skill halts or is done, output status and recommendations as readable text plus a resume template. Apply whether the skill halted itself or the user stopped it.
 
-```json
-{
-  "status": "halted|done",
-  "reason": "reason from state.json halt object or stop reason",
-  "version": "N (the version at halt) or null if before version loop",
-  "substep": "X (the substep letter) or null",
-  "decision_needed": {
-    "category": "package|package_expired|guide|test|env|route|audit|other",
-    "description": "one-line summary of what the user must decide",
-    "context": "full evidence from state.json halt.evidence or logs",
-    "items": [
-      {
-        "name": "vendor/pkg (or other item name)",
-        "problem": "no release for Laravel N | abandoned | ...",
-        "evidence": "release range checked, abandoned flag, replaced_by, files_touched, risk",
-        "options": ["fork", "rebuild", "migrate", "skip", "replace", "skip_until", "replace_until"],
-        "suggested": "one of options, from state.json",
-        "action_package": "vendor/replacement or null"
-      }
-    ]
-  },
-  "auto_resolved": [
-    "vendor/pkg ^X (compatible release chosen automatically; no decision)"
-  ],
-  "resume_with": {
-    "vendor/pkg": "one of options, copied per item"
-  },
-  "next_action": "instruction from state.json halt.next or the skill's recommendation"
-}
-```
+Format:
+
+1. **Status line:** `Status: halted | done` and the reason.
+2. **Version line:** `Laravel N → PHP X (substep Y)` or `before upgrade loop`.
+3. If decisions are needed, include:
+   - **Packages needing a decision:** a table with Package, Problem, Evidence, Options, and Suggested columns.
+   - **Auto-resolved packages:** a comma-separated list, omitted when empty.
+   - **To resume:** one line per package using `package → [your choice]`.
+4. If no decision is needed, include **Next:** with the instruction from `state.json halt.next` or the recommendation.
 
 Rules:
-- `decision_needed.items` lists ONLY packages awaiting a user choice. One entry per package. Never mix in packages that resolve automatically.
-- `auto_resolved` lists packages upgraded or downgraded automatically to a compatible release. Omit the field when empty.
-- `resume_with` is a template of the exact answers the user returns, one key per item in `decision_needed.items`. Keys must match `name` values exactly.
-- Output this JSON only (no prose), per the rule above.
+- Table rows include only packages awaiting a user choice. Never mix in packages that resolve automatically.
+- Auto-resolved packages are listed separately; omit the line when none.
+- Each row's Options and Suggested values follow the Mapping to decision output table.
+- Reject any action not in that row's Options.
 
-Example:
-```json
-{
-  "status": "halted",
-  "reason": "Laravel 10 package compatibility review found 2 packages needing a decision.",
-  "version": "10",
-  "substep": "D",
-  "decision_needed": {
-    "category": "package",
-    "description": "Choose fork, rebuild, replace, or skip for 2 incompatible packages.",
-    "context": "Full evidence in docs/upgrade/00-preflight.md and state.json incompatible_packages.",
-    "items": [
-      {
-        "name": "jenssegers/agent",
-        "problem": "No Laravel 10-compatible release (latest supports ^9.0)",
-        "evidence": "Checked all releases; highest Laravel constraint ^9.0. Files touched: 4 (medium).",
-        "options": ["fork", "rebuild", "skip"],
-        "suggested": "fork",
-        "action_package": null
-      },
-      {
-        "name": "fideloper/proxy",
-        "problem": "Abandoned; functionality built into Laravel framework",
-        "evidence": "abandoned: true; replaced_by suggestion present. Files touched: 1 (low).",
-        "options": ["skip", "replace"],
-        "suggested": "replace",
-        "action_package": null
-      }
-    ]
-  },
-  "auto_resolved": [
-    "laravel/framework ^10.0",
-    "doctrine/dbal ^3.0"
-  ],
-  "resume_with": {
-    "jenssegers/agent": "fork",
-    "fideloper/proxy": "replace"
-  },
-  "next_action": "Reply with resume_with filled in. Re-run the skill after all items are answered."
-}
+Example output:
+
+```text
+Status: halted
+Reason: Laravel 10 package compatibility review found 2 packages needing a decision.
+Laravel 10 → PHP 8.2 (substep D)
+
+Packages needing a decision:
+
+| Package | Problem | Evidence | Options | Suggested |
+|---------|---------|----------|---------|-----------|
+| jenssegers/agent | No Laravel 10-compatible release (latest supports ^9.0) | 4 files touched (medium risk). Checked all releases; highest constraint ^9.0. | fork, rebuild, skip | fork |
+| fideloper/proxy | Abandoned; functionality built into Laravel framework | 1 file touched (low risk). Replaced by Laravel built-in. | skip, replace | replace |
+
+Auto-resolved packages: laravel/framework ^10.0, doctrine/dbal ^3.0
+
+To resume:
+jenssegers/agent → [your choice: fork | rebuild | skip]
+fideloper/proxy → [your choice: skip | replace]
+
+Reply with your decisions and re-run the skill.
 ```
 
 ## Done
