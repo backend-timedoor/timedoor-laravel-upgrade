@@ -30,7 +30,7 @@ Verify flags with `claude --help` before scheduling unattended runs.
 8. If a rule conflicts with the official guide, the guide wins for framework structure only. Log the deviation. Business logic rules still apply.
 9. Package upgrades and downgrades needed for the Laravel upgrade are allowed without asking: `composer require vendor/pkg:^X -W` and `composer update` may move a package up or down to a release that supports the target. Ask only for the **decisions required** listed under "Package decisions" below.
 10. Before any incompatible-package workaround or change expected to affect many files, identify every affected feature and its existing tests. If coverage is missing, first write characterization tests for the current behavior. Run the complete affected-feature test set and make it pass before changing code. After the change, run the same test set; compare failures against the intended compatibility change and record the result. Never replace characterization tests with new post-change-only tests.
-11. Commit gate: stage only intended files. Before every commit, run `git diff --cached --stat` and show the diff summary. Verify no user-excluded paths are staged. Do not commit until the relevant test gate and route verification pass. If tests fail or user rejects staged files, leave uncommitted and halt or retry. Never use `git add app/` or broad staging when only specific files belong in the commit. Show staged changes and ask user approval before running `git commit`.
+11. Commit gate, including both baseline commits: stage only intended files. Before every commit, run `git diff --cached --stat` and show the diff summary. Verify no user-excluded paths are staged. Do not commit until the applicable test gate and route verification pass; baseline commits require the baseline test gate and successful snapshot commands. If tests fail or the user rejects staged files, leave them uncommitted and halt or retry. Never use `git add app/` or broad staging when only specific files belong in the commit. Show staged changes and ask for explicit user approval before every `git commit`.
 
 ## ALLOWED_TOOLS
 
@@ -39,14 +39,18 @@ Use only these. Anything else halts the run.
 ```
 Read Glob Grep Edit Write Agent
 Bash(git status:*) Bash(git log:*) Bash(git diff:*) Bash(git rev-parse:*)
-Bash(git checkout:*) Bash(git switch:*) Bash(git branch:*) Bash(git add:*) Bash(git commit:*)
+Bash(git checkout -b:*) Bash(git switch:*) Bash(git branch:*) Bash(git add:*) Bash(git commit:*)
 Bash(composer show:*) Bash(composer require:*) Bash(composer update:*) Bash(composer audit:*) Bash(composer outdated:*) Bash(composer validate:*)
-Bash(php -v:*) Bash(php artisan:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*)
+Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php artisan migrate --env=testing:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*)
 Bash(python3 *scripts/make_report.py:*)
 WebFetch(domain:laravel.com) WebFetch(domain:packagist.org)
 ```
 
-`php artisan` is allowed, but `migrate:fresh`, `db:wipe`, and `migrate:reset` are blocked unless the test DB guard passes (step 0.2).
+Only `php artisan migrate --env=testing` is permitted, and only after the test DB guard passes. If an official guide or approved package migration requires another command, halt and ask the user to run it manually. `migrate:fresh`, `db:wipe`, and `migrate:reset` remain forbidden.
+
+PHP installation or switching is outside the skill's default tool permissions. When PHP does not meet version N's minimum, halt with the required PHP version and project-specific switch instruction. Resume after the user switches PHP and `php -v` confirms it. Never modify the global PHP installation automatically.
+
+The allowlist reduces accidental execution; the Hard rules remain authoritative for every command, including arguments accepted by an allowed prefix.
 
 **Agent orchestration notes:** Agent is used only for 0.4 (parallel Packagist queries) and G.1 (parallel static analysis). Each agent reads its assigned data from shared `state.json` and writes results to separate files (`docs/upgrade/logs/<name>.json`), then results are merged serially. No agent mutates state or commits; all writes are orchestrated by the main flow.
 
@@ -112,12 +116,12 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 **0.3 Baseline**
 - `git checkout -b upgrade/baseline` (if absent). Commit nothing.
 - Run the test suite. If it fails, halt with counts. Store the passing test count in `state.json` as `test_count` and the PHP binary used as `php_binary`.
-- If `.gitignore` ignores `docs/` or `/docs`, delete only that line and commit it on `upgrade/baseline` as `chore(upgrade): track docs/upgrade`. This is the only allowed baseline commit. Log the change.
+- If `.gitignore` ignores `docs/` or `/docs`, delete only that line. Stage that exact change, apply the commit gate, then commit it on `upgrade/baseline` as `chore(upgrade): track docs/upgrade`. This and the baseline snapshot are the only allowed baseline commits. Log the change.
 - Save: `php artisan route:list --json > docs/upgrade/baseline/routes.json`, `composer show --format=json > docs/upgrade/baseline/packages.json`, `composer audit --format=json > docs/upgrade/baseline/audit.json` (pre-existing advisories; the gate compares against this file). Capture framework info in `about.txt`: run `php artisan about > docs/upgrade/baseline/about.txt` on Laravel 8+, or `php artisan --version > docs/upgrade/baseline/about.txt` when `about` is unavailable on Laravel 6–7. Record any other command failure and halt.
-- Commit baseline docs: `git add docs/upgrade/baseline/ docs/upgrade/state.json && git commit -m "docs(upgrade): baseline snapshot for laravel-{baseline_major}"`. This tracks upgrade progress. Do not commit `docs/upgrade/logs/` or `.claude/` (add them to `.gitignore` if absent).
+- Stage only `docs/upgrade/baseline/` and `docs/upgrade/state.json`, apply the commit gate, then commit as `docs(upgrade): baseline snapshot for laravel-{baseline_major}`. Do not commit `docs/upgrade/logs/` or `.claude/`; add exact ignore entries if absent.
 
 **0.4 Compatibility matrix**
-- Do not fetch upgrade guides in bulk. Instead, fetch `https://laravel.com/docs/{N}.x/upgrade` on-demand when upgrading to version N (in the version loop, step C). Save to `docs/upgrade/guides/N.md`. Record the PHP minimum per version.
+- Do not fetch upgrade guides in bulk. Instead, fetch `https://laravel.com/docs/{N}.x/upgrade` on-demand when upgrading to version N (substep C). Save to `docs/upgrade/guides/N.md`. Record the PHP minimum per version.
 - For each direct package in `composer.json`, fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` to get all releases (not just latest). Find a release that supports `current_version` (the first Laravel version to be upgraded to, = `baseline_major + 1`) and the PHP minimum for that version. Write `docs/upgrade/00-preflight.md`.
 - Collect all packages with no supporting release for `current_version`. For each:
   - Use the complete p2 metadata to determine the package's supported Laravel version range: inspect every release's `require` constraints, identify the highest and lowest Laravel versions supported, and record the exact compatible release/version constraints for the current Laravel version if one exists. Do not label a package unsupported until this check is complete.
@@ -127,7 +131,7 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
   - Record in state.json under `incompatible_packages`: `[{name, abandoned, replaced_by, risk, files_touched, migration_pending}]`.
 - Packages with a compatible release (up or down) are resolved automatically in D. Record the chosen version in `00-preflight.md`.
 - Halt only with the packages that need a decision required (see "Package decisions"). User decides per package: fork, rebuild, migrate (if `migration_pending`), skip, replace, skip_until, or replace_until. Re-run after each decision; add the decision to `state.json.resolved_packages` with action, optional `action_package`, optional `until_version`, and notes.
-- **Note:** Incompatible packages found for `current_version` may regain compatibility in later versions (e.g., a package dropped support in 8 but restored it in 9 or later). These are recorded; per-version compatibility is re-checked during each version's upgrade loop when that version is entered (step D), not predicted in advance.
+- **Note:** Incompatible packages found for `current_version` may regain compatibility in later versions (e.g., a package dropped support in 8 but restored it in 9 or later). These are recorded; per-version compatibility is re-checked during each version's upgrade loop when that version is entered (substep D), not predicted in advance.
 
 ### 0.4 parallel orchestration (Package fan-out only)
 
@@ -158,8 +162,8 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 `git checkout -b upgrade/laravel-N upgrade/laravel-(N-1)`. For the first run version (`baseline_major + 1`), branch from `upgrade/baseline`. Never create a branch for a `skipped` major.
 
 ### B. PHP alignment
-- If current PHP < minimum for N: install or switch PHP per project's environment (Docker image tag or `phpenv`/`update-alternatives`). Do not change PHP globally without recording the command.
-- Run the test suite on the new PHP. Failure → counts toward retries (see G).
+- If current PHP < the minimum for N, halt at substep `B`. Report the required version and the project's apparent switch mechanism (for example, its Docker image, `phpenv`, or system alternatives), but run no installation or switch command.
+- Resume after the user switches PHP. Confirm with `php -v`, record the binary/version, then run the test suite. Failure counts toward retries (see G).
 
 ### C. Fetch and read the guide
 - Fetch only `https://laravel.com/docs/N.x/upgrade` for the current N. Retry once on failure; a second failure halts at substep `C`.
@@ -170,7 +174,7 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Determine the PHP minimum for N from the current guide. Fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` through `WebFetch(domain:packagist.org)` for every direct package; evaluate all releases compatible with both Laravel N and that PHP version. Do not rely on the latest-release page or reuse the 0.4 result without re-checking.
 - `composer outdated --direct --format=json`.
 - For each direct package needing change for N (upgrade or downgrade to the release that supports N and the PHP minimum): `composer require vendor/pkg:^X -W` (one at a time). No confirmation needed. Keep `composer.json` and `composer.lock` unstaged until the test and verification gates pass.
-- If a direct package has no compatible release for Laravel N, halt before changing dependencies. Record the package, compatibility evidence, and suggested action in `state.json` and the version doc. User decides: fork, migrate, skip, or replace.
+- If a direct package has no compatible release for Laravel N, halt before changing dependencies. Record the package, compatibility evidence, and suggested action in `state.json` and the version doc. Offer only the actions produced by the Mapping to decision output table.
 - `composer audit` must not report new advisories. If it does, record them and halt unless the user approved.
 
 ### E. Framework
@@ -257,14 +261,14 @@ User decides. Actions:
 - **migrate:** Only if `migration_pending: true`. Skill applies the migration on next run (substep F).
 - **skip:** Accept incompatibility for this version and all future versions. Skill records in report and continues.
 - **replace:** Switch to `action_package` in `composer.json` for this version and all future versions. Skill resumes.
-- **skip_until:** Accept incompatibility through version N. Skill re-checks and halts again at N for a fresh decision. Set `until_version: N` in `state.json`.
-- **replace_until:** Switch to `action_package` through version N. Skill re-checks and halts again at N for a fresh decision. Set `until_version: N` in `state.json`.
+- **skip_until:** Accept incompatibility through version N, inclusive. Set `until_version: N` in `state.json`; re-check when entering N+1.
+- **replace_until:** Switch to `action_package` through version N, inclusive. Set `until_version: N` in `state.json`; re-check when entering N+1.
 
-Skill never auto-migrates without user decision. At the start of each version loop, if any package has `until_version <= current_version`, halt to ask for renewal of that decision.
+Skill never auto-migrates without user decision. At the start of each version loop, if any package has `until_version < current_version`, halt to ask for renewal of that decision.
 
 ## Mapping to decision output
 
-When outputting JSON on halt, transform `state.json incompatible_packages` to `decision_needed.items` as follows:
+When building halt output, transform `state.json incompatible_packages` to the readable decision table as follows. When invoked with `--output-format json`, the CLI wraps this same readable text in its normal JSON result; do not invent a second skill-specific JSON schema.
 
 | State field | Output field | Logic |
 |------------|-------------|-------|

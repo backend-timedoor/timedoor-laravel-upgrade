@@ -50,7 +50,7 @@ Output: `docs/upgrade/` (per-version docs, `state.json`, `command-log.jsonl`, `R
 - Test DB guard before any migrate/test, including a preflight scan that halts SQLite `:memory:` when migrations contain MySQL-only SQL (`AUTO_INCREMENT`, `ALTER TABLE ... CHANGE COLUMN`, etc.). No automatic migration rewrite.
 - Never changes business logic automatically.
 - Collects all incompatible packages in one preflight report, classifies risk, then halts for a per-package decision.
-- Supports `fork`, `migrate`, `skip`, or `replace`; records each decision in `state.json`.
+- Supports `fork`, `rebuild`, `migrate`, `skip`, `replace`, `skip_until`, or `replace_until`; records each decision in `state.json`.
 - Halts on unexpected route changes and test regressions after 2 retries.
 
 ## Before publishing
@@ -64,4 +64,5 @@ Output: `docs/upgrade/` (per-version docs, `state.json`, `command-log.jsonl`, `R
 .claude-plugin/marketplace.json
 skills/laravel-upgrade/SKILL.md
 skills/laravel-upgrade/scripts/make_report.py
+skills/laravel-upgrade/scripts/test_make_report.py
 ```

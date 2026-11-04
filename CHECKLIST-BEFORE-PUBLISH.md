@@ -26,11 +26,8 @@ Before releasing to marketplace, verify:
 - [ ] All references to version numbers, PHP versions, and Laravel versions are current (6 → 13, PHP → 8.4)
 
 ## Tool allowlists
-- [ ] Verify Bash allowlist in SKILL.md matches your Claude Code version:
-  ```
-  --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
-  ```
-  Run `claude --help` to confirm no tool names changed in your version.
+- [ ] Run `claude --help` and verify the scoped entries under `ALLOWED_TOOLS` in SKILL.md are supported by the installed Claude Code version.
+- [ ] Confirm the allowlist does not grant broad `php artisan`, `git checkout`, PHP installation/switching, remote Git, or destructive command access.
 
 ## Final validation
 - [ ] No `TODO`, `FIXME`, `YOUR NAME`, or `YOUR_ORG` left in code (except placeholders explicitly marked in comments)

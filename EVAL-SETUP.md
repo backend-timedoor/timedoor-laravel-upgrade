@@ -43,8 +43,13 @@ claude plugin eval . \
   --no-publish \
   --ablation none \
   --runs 1 \
-  --allow-tools Read Glob Grep Edit Write \
-  'Bash(git:*)' 'Bash(php artisan:*)' 'Bash(composer:*)' 'Bash(vendor/bin/*)' \
+  --allow-tools Read Glob Grep Edit Write Agent \
+  'Bash(git status:*)' 'Bash(git log:*)' 'Bash(git diff:*)' 'Bash(git rev-parse:*)' \
+  'Bash(git checkout -b:*)' 'Bash(git switch:*)' 'Bash(git branch:*)' 'Bash(git add:*)' 'Bash(git commit:*)' \
+  'Bash(composer show:*)' 'Bash(composer require:*)' 'Bash(composer update:*)' 'Bash(composer audit:*)' 'Bash(composer outdated:*)' 'Bash(composer validate:*)' \
+  'Bash(php -v:*)' 'Bash(php artisan test:*)' 'Bash(php artisan route:list:*)' 'Bash(php artisan about:*)' 'Bash(php artisan --version:*)' 'Bash(php artisan migrate --env=testing:*)' \
+  'Bash(php vendor/bin/phpunit:*)' 'Bash(vendor/bin/phpstan:*)' 'Bash(vendor/bin/rector:*)' 'Bash(python3 *scripts/make_report.py:*)' \
+  'WebFetch(domain:laravel.com)' 'WebFetch(domain:packagist.org)' \
   --json evals/results/latest.json
 
 # View HTML report:
@@ -85,7 +90,7 @@ Skip automated evals. Instead, manually verify the skill by:
 1. **Verify** `scaffold_script` mechanism by inspecting the runner's actual code or recent changelog  
 2. **Implement** the correct scaffold pattern (likely option B or hook-based)  
 3. **Re-run evals** with fixtures populated; expect all graders to pass  
-4. **Write `scripts/make_report.py`** (see SKILL.md steps H and final report)  
+4. **Run** `python3 skills/laravel-upgrade/scripts/test_make_report.py`
 5. **Test manually** on a real Laravel app in staging before publishing to marketplace
 
 ## Files
