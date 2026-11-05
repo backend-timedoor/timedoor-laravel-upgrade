@@ -41,14 +41,27 @@ Read Glob Grep Edit Write Agent
 Bash(git status:*) Bash(git log:*) Bash(git diff:*) Bash(git rev-parse:*)
 Bash(git checkout -b:*) Bash(git switch:*) Bash(git branch:*) Bash(git add:*) Bash(git commit:*)
 Bash(composer show:*) Bash(composer require:*) Bash(composer update:*) Bash(composer audit:*) Bash(composer outdated:*) Bash(composer validate:*)
-Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php artisan migrate --env=testing:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*)
+Bash(docker compose config:*) Bash(docker compose ps:*)
+Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php artisan migrate --env=testing:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*) Bash(vendor/bin/sail:*)
+Bash(docker compose exec:* php:*) Bash(docker compose exec:* composer:*) Bash(docker compose exec:* vendor/bin/phpstan:*) Bash(docker compose exec:* vendor/bin/rector:*) Bash(docker compose exec:* php vendor/bin/phpunit:*) Bash(docker compose exec:* python3:*)
 Bash(python3 *scripts/make_report.py:*)
 WebFetch(domain:laravel.com) WebFetch(domain:packagist.org)
 ```
 
 Only `php artisan migrate --env=testing` is permitted, and only after the test DB guard passes. If an official guide or approved package migration requires another command, halt and ask the user to run it manually. `migrate:fresh`, `db:wipe`, and `migrate:reset` remain forbidden.
 
-PHP installation or switching is outside the skill's default tool permissions. When PHP does not meet version N's minimum, halt with the required PHP version and project-specific switch instruction. Resume after the user switches PHP and `php -v` confirms it. Never modify the global PHP installation automatically.
+### Docker runtime selection
+
+- Before section 0.1, inspect the repository for `compose.yaml`, `compose.yml`, `docker-compose.yml`, `Dockerfile`, or `vendor/bin/sail`.
+- If no Docker indicators exist, use host `php`, `composer`, Artisan, PHPUnit, PHPStan, Rector, and report commands as listed below.
+- If Docker indicators exist, do not use host PHP or Composer for application work, even when `php -v` succeeds. Prefer `vendor/bin/sail` when present; otherwise run `docker compose config --services` and `docker compose ps`.
+- Select a PHP service only when exactly one candidate is clear from the Compose configuration: `APP_SERVICE`, Sail's `laravel.test`, or a service whose image/build exposes PHP and is named `app`, `php`, or `web`. If no candidate or multiple candidates remain, halt at `0.1`, write state, list candidates, and ask for the service name. Never guess.
+- Verify the selected runtime with `docker compose exec -T <service> php -v`, `composer validate`, and `php artisan --version`. Record `runtime.type`, `runtime.service`, `runtime.prefix`, `php_binary`, and `php_current` in `state.json`.
+- Run every PHP, Composer, Artisan, PHPUnit, PHPStan, Rector, and `make_report.py` command inside the selected service. Host-only commands remain limited to Git, file inspection, WebFetch, and report orchestration when the report script is not available in the container.
+- For Docker Compose testing, a Compose service name is a valid local `DB_HOST`. The test database suffix and all other 0.2 guards still apply. Never boot the app to discover configuration or use production `.env` values.
+- At substep B, compare the container PHP version with the Laravel requirement. Tell the user to update/rebuild the image or switch the configured service; never install or switch PHP automatically.
+
+PHP installation or switching is outside the skill's default tool permissions. When PHP does not meet version N's minimum, halt with the required PHP version and project-specific switch instruction. Resume after the user switches PHP and the selected runtime's `php -v` confirms it. Never modify the global PHP installation automatically.
 
 The allowlist reduces accidental execution; the Hard rules remain authoritative for every command, including arguments accepted by an allowed prefix.
 
@@ -75,6 +88,12 @@ File: `docs/upgrade/state.json`. Read it on start. Resume from `current_version`
   "target_version": 13,
   "php_current": "7.4",
   "php_target": "8.4",
+  "runtime": {
+    "type": "host|docker-compose|sail",
+    "service": null,
+    "prefix": null,
+    "php_binary": null
+  },
   "versions": {
     "7": {"status": "skipped", "branch": null, "commit": null, "retries": 0, "doc": null, "reason": "baseline laravel/framework 7.30.6 already satisfies major 7"},
     "8": {"status": "pending", "branch": "upgrade/laravel-8", "commit": null, "retries": 0, "doc": "docs/upgrade/8-laravel-8.md"}
@@ -96,7 +115,7 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - `composer.json` must require `laravel/framework`. Record the current version as `baseline_major`.
 - For each N from 7 to 13: if `baseline_major >= N`, set `versions[N] = {"status": "skipped", "branch": null, "commit": null, "retries": 0, "doc": null, "reason": "..."}`. Set `current_version` to `baseline_major + 1`. Create no branch for skipped majors.
 - Confirm `composer.lock` `laravel/framework` version matches the `baseline_major` recorded. Mismatch → halt with `substep: "0.1"`.
-- `php -v` must work. Record the version.
+- Resolve the runtime under **Docker runtime selection** before running PHP or Composer. In Docker mode, host `php -v` is not evidence; the selected container command must work. Record the runtime metadata and container PHP version.
 - After 0.1 passes, create `upgrade/baseline` with `git checkout -b upgrade/baseline` if absent. Do not create another setup branch. This branch is the resume point for later setup checks.
 - On resume after a 0.2 halt, allow only the expected setup changes: an ignored `.env.testing`, plus an explicitly reviewed `.gitignore` or `.env.testing.example` change. Any other dirty path halts at 0.1.
 
