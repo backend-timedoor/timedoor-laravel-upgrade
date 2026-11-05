@@ -97,6 +97,8 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - For each N from 7 to 13: if `baseline_major >= N`, set `versions[N] = {"status": "skipped", "branch": null, "commit": null, "retries": 0, "doc": null, "reason": "..."}`. Set `current_version` to `baseline_major + 1`. Create no branch for skipped majors.
 - Confirm `composer.lock` `laravel/framework` version matches the `baseline_major` recorded. Mismatch → halt with `substep: "0.1"`.
 - `php -v` must work. Record the version.
+- After 0.1 passes, create `upgrade/baseline` with `git checkout -b upgrade/baseline` if absent. Do not create another setup branch. This branch is the resume point for later setup checks.
+- On resume after a 0.2 halt, allow only the expected setup changes: an ignored `.env.testing`, plus an explicitly reviewed `.gitignore` or `.env.testing.example` change. Any other dirty path halts at 0.1.
 
 **0.2 Test DB guard** (before any test or migrate command)
 - Read `.env.testing`. If missing, halt with `substep: "0.2"`, write state (see State), and ask the user to create it.
@@ -114,7 +116,8 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - Do not read or use production `.env` values.
 
 **0.3 Baseline**
-- `git checkout -b upgrade/baseline` (if absent). Commit nothing.
+- Continue on `upgrade/baseline`; do not create `upgrade/setup`.
+- Keep `.env.testing` ignored and uncommitted. If `.gitignore` or `.env.testing.example` changed during setup, stage only the reviewed file(s), apply the commit gate, show the staged diff, and ask for explicit user approval before committing the baseline setup change.
 - Run the test suite. If it fails, halt with counts. Store the passing test count in `state.json` as `test_count` and the PHP binary used as `php_binary`.
 - If `.gitignore` ignores `docs/` or `/docs`, delete only that line. Stage that exact change, apply the commit gate, then commit it on `upgrade/baseline` as `chore(upgrade): track docs/upgrade`. This and the baseline snapshot are the only allowed baseline commits. Log the change.
 - Save: `php artisan route:list --json > docs/upgrade/baseline/routes.json`, `composer show --format=json > docs/upgrade/baseline/packages.json`, `composer audit --format=json > docs/upgrade/baseline/audit.json` (pre-existing advisories; the gate compares against this file). Capture framework info in `about.txt`: run `php artisan about > docs/upgrade/baseline/about.txt` on Laravel 8+, or `php artisan --version > docs/upgrade/baseline/about.txt` when `about` is unavailable on Laravel 6–7. Record any other command failure and halt.
