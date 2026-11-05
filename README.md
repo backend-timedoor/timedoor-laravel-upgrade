@@ -49,6 +49,7 @@ Output: `docs/upgrade/` (per-version docs, `state.json`, `command-log.jsonl`, `R
 - No push, no remote changes, no merge to main.
 - Test DB guard before any migrate/test, including a preflight scan that halts SQLite `:memory:` when migrations contain MySQL-only SQL (`AUTO_INCREMENT`, `ALTER TABLE ... CHANGE COLUMN`, etc.). No automatic migration rewrite.
 - Never changes business logic automatically.
+- Uses Composer's local dependency solver first, then fetches full Packagist metadata only for blocking packages.
 - Collects all incompatible packages in one preflight report, classifies risk, then halts for a per-package decision.
 - Supports `fork`, `rebuild`, `migrate`, `skip`, `replace`, `skip_until`, or `replace_until`; records each decision in `state.json`.
 - Halts on unexpected route changes and test regressions after 2 retries.

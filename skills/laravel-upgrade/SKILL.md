@@ -40,7 +40,7 @@ Use only these. Anything else halts the run.
 Read Glob Grep Edit Write Agent
 Bash(git status:*) Bash(git log:*) Bash(git diff:*) Bash(git rev-parse:*)
 Bash(git checkout -b:*) Bash(git switch:*) Bash(git branch:*) Bash(git add:*) Bash(git commit:*)
-Bash(composer show:*) Bash(composer require:*) Bash(composer update:*) Bash(composer audit:*) Bash(composer outdated:*) Bash(composer validate:*)
+Bash(composer show:*) Bash(composer require:*) Bash(composer update:*) Bash(composer audit:*) Bash(composer outdated:*) Bash(composer prohibits:*) Bash(composer validate:*)
 Bash(docker compose config:*) Bash(docker compose ps:*)
 Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php artisan migrate --env=testing:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*) Bash(vendor/bin/sail:*)
 Bash(docker compose exec:* php:*) Bash(docker compose exec:* composer:*) Bash(docker compose exec:* vendor/bin/phpstan:*) Bash(docker compose exec:* vendor/bin/rector:*) Bash(docker compose exec:* php vendor/bin/phpunit:*) Bash(docker compose exec:* python3:*)
@@ -146,7 +146,8 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 
 **0.4 Compatibility matrix**
 - Do not fetch upgrade guides in bulk. Instead, fetch `https://laravel.com/docs/{N}.x/upgrade` on-demand when upgrading to version N (substep C). Save to `docs/upgrade/guides/N.md`. Record the PHP minimum per version.
-- For each direct package in `composer.json`, fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` to get all releases (not just latest). Find a release that supports `current_version` (the first Laravel version to be upgraded to, = `baseline_major + 1`) and the PHP minimum for that version. Write `docs/upgrade/00-preflight.md`.
+- Run `composer prohibits laravel/framework ^{current_version}.0 --recursive` and `composer prohibits php ^{php_min}` (PHP minimum for `current_version`). Packages absent from both outputs are compatible; record them as auto-resolved without fetching metadata. Save output to `docs/upgrade/logs/prohibits-{current_version}.txt`.
+- For each direct package listed by `prohibits`, fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` to get all releases (not just latest). Find a release that supports `current_version` (the first Laravel version to be upgraded to, = `baseline_major + 1`) and the PHP minimum for that version. Write `docs/upgrade/00-preflight.md`.
 - Collect all packages with no supporting release for `current_version`. For each:
   - Use the complete p2 metadata to determine the package's supported Laravel version range: inspect every release's `require` constraints, identify the highest and lowest Laravel versions supported, and record the exact compatible release/version constraints for the current Laravel version if one exists. Do not label a package unsupported until this check is complete.
   - Check the p2 metadata for `abandoned` field and `replace` suggestion.
@@ -163,7 +164,7 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 
 **Package fan-out**
 
-- After reading `composer.json`, launch one agent per direct package.
+- After `composer prohibits`, launch one agent per direct package it listed. No blocking packages: skip the fan-out.
 - Each agent fetches `https://repo.packagist.org/p2/<vendor>/<package>.json` through `WebFetch(domain:packagist.org)`, evaluates all releases for target-compatible versions, and writes only `docs/upgrade/logs/package-<safe-name>.json`.
 - For packages without target support, the agent also records `abandoned`, `replaced_by`, package migration evidence, and usage-file matches. It must not edit `state.json`.
 - The main flow merges package results into `docs/upgrade/00-preflight.md` and `state.json` serially, deduplicating by package name.
@@ -176,8 +177,8 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Guides are not fetched or merged here; they are fetched on-demand when upgrading to each version (substep C).
 
 **0.5 Dev tools**
-- Attempt to install `larastan/larastan`, `rector/rector` as dev dependencies only if absent. Record in the command log. Do not change tool config that already exists.
-- If either tool fails to install due to dependency conflicts with the baseline Laravel version (e.g., larastan requires SemVer ^3.0 but Laravel 7 locks ^1.5), do not block: skip them in section 0.5 and install per-version during each version's substep G.1 (static analysis). Log the conflict and reason for deferral.
+- Attempt to install `larastan/larastan`, `rector/rector`, `driftingly/rector-laravel` as dev dependencies only if absent. Record in the command log. Do not change tool config that already exists.
+- If any tool fails to install due to dependency conflicts with the baseline Laravel version (e.g., larastan requires SemVer ^3.0 but Laravel 7 locks ^1.5), do not block: skip them in section 0.5 and install per-version during each version's substep G.1 (static analysis). Log the conflict and reason for deferral.
 - If the tool installs, continue. If it fails for another reason (not a SemVer/dep conflict), halt with the error and ask the user to resolve it manually.
 
 ## Per-version loop (N = current_version … 13)
@@ -195,7 +196,7 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Read `docs/upgrade/guides/N.md`. Build a checklist of "Breaking Changes" and required file changes in `docs/upgrade/N-laravel-N.md` under "Official guide checklist". Mark each item `applies` or `n/a` with a reason.
 
 ### D. Packages
-- Determine the PHP minimum for N from the current guide. Fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` through `WebFetch(domain:packagist.org)` for every direct package; evaluate all releases compatible with both Laravel N and that PHP version. Do not rely on the latest-release page or reuse the 0.4 result without re-checking.
+- Determine the PHP minimum for N from the current guide. Run `composer prohibits laravel/framework ^N.0 --recursive` and `composer prohibits php ^<php_min>`; save output to `docs/upgrade/logs/prohibits-N.txt`. Fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` through `WebFetch(domain:packagist.org)` only for direct packages listed there; evaluate all releases compatible with both Laravel N and that PHP version. Do not rely on the latest-release page or reuse the 0.4 result without re-checking.
 - `composer outdated --direct --format=json`.
 - For each direct package needing change for N (upgrade or downgrade to the release that supports N and the PHP minimum): `composer require vendor/pkg:^X -W` (one at a time). No confirmation needed. Keep `composer.json` and `composer.lock` unstaged until the test and verification gates pass.
 - If a direct package has no compatible release for Laravel N, halt before changing dependencies. Record the package, compatibility evidence, and suggested action in `state.json` and the version doc. Offer only the actions produced by the Mapping to decision output table.
@@ -218,11 +219,11 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
    - If installation fails because of a dependency or SemVer conflict, log the conflict for version N and continue without that tool. Any other installation failure halts.
    - Launch parallel agents only for tools available after this check:
      - **PHPStan agent:** Run `vendor/bin/phpstan analyse app config routes --error-format=json > docs/upgrade/logs/phpstan-N.json`. Writes only the JSON output. Treats errors as data; no editing.
-     - **Rector agent:** Run `vendor/bin/rector process --dry-run --output-format=json > docs/upgrade/logs/rector-N.json`. Writes only the JSON output. No edits, no suggestions.
+     - **Rector agent:** Run `vendor/bin/rector process --dry-run --output-format=json > docs/upgrade/logs/rector-N.json`. When `driftingly/rector-laravel` is installed and no project `rector.php` exists, the main flow writes `docs/upgrade/logs/rector-N.php` before launch using `RectorLaravel\Set\LaravelLevelSetList::UP_TO_LARAVEL_N0` (`N0` = e.g. `80`, `130`); the agent adds `--config=docs/upgrade/logs/rector-N.php`. Writes only the JSON output. No edits, no suggestions.
    - Both agents read the same `app/`, `config/`, `routes/` snapshots (no mutations during analysis). No `state.json` writes.
    - The main flow waits for launched agents, reads available output files, records new PHPStan errors against `upgrade/baseline`, and prepares Rector proposals. Missing-tool conflicts are documented as skipped analysis, not failures.
 2. Apply only Rector proposals that are pure renames listed in the guide. Keep rename changes unstaged until the test and verification gates pass.
-3. Test gate: `php artisan test`. No commit is allowed before this passes.
+3. Test gate: `php artisan test > docs/upgrade/logs/test-N.txt`. No commit is allowed before this passes. On failure, read only failure blocks (test name, message, `file:line`) and ±10 source lines around each `file:line`; never read the whole log or whole source files.
    - Fail: `versions[N].retries += 1`. If retries < 2, go to 1 (static analysis) with the failure output as context. Else halt.
    - Pass: continue.
 4. Verification diff. No commit is allowed until this passes:

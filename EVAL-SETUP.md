@@ -46,7 +46,7 @@ claude plugin eval . \
   --allow-tools Read Glob Grep Edit Write Agent \
   'Bash(git status:*)' 'Bash(git log:*)' 'Bash(git diff:*)' 'Bash(git rev-parse:*)' \
   'Bash(git checkout -b:*)' 'Bash(git switch:*)' 'Bash(git branch:*)' 'Bash(git add:*)' 'Bash(git commit:*)' \
-  'Bash(composer show:*)' 'Bash(composer require:*)' 'Bash(composer update:*)' 'Bash(composer audit:*)' 'Bash(composer outdated:*)' 'Bash(composer validate:*)' \
+  'Bash(composer show:*)' 'Bash(composer require:*)' 'Bash(composer update:*)' 'Bash(composer audit:*)' 'Bash(composer outdated:*)' 'Bash(composer prohibits:*)' 'Bash(composer validate:*)' \
   'Bash(php -v:*)' 'Bash(php artisan test:*)' 'Bash(php artisan route:list:*)' 'Bash(php artisan about:*)' 'Bash(php artisan --version:*)' 'Bash(php artisan migrate --env=testing:*)' \
   'Bash(php vendor/bin/phpunit:*)' 'Bash(vendor/bin/phpstan:*)' 'Bash(vendor/bin/rector:*)' 'Bash(python3 *scripts/make_report.py:*)' \
   'WebFetch(domain:laravel.com)' 'WebFetch(domain:packagist.org)' \
