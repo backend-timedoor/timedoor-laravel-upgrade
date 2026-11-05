@@ -58,7 +58,7 @@ Only `php artisan migrate --env=testing` is permitted, and only after the test D
 - Select a PHP service only when exactly one candidate is clear from the Compose configuration: `APP_SERVICE`, Sail's `laravel.test`, or a service whose image/build exposes PHP and is named `app`, `php`, or `web`. If no candidate or multiple candidates remain, halt at `0.1`, write state, list candidates, and ask for the service name. Never guess.
 - Verify the selected runtime with `docker compose exec -T <service> php -v`, `composer validate`, and `php artisan --version`. Record `runtime.type`, `runtime.service`, `runtime.prefix`, `php_binary`, and `php_current` in `state.json`.
 - Run every PHP, Composer, Artisan, PHPUnit, PHPStan, Rector, and `make_report.py` command inside the selected service. Host-only commands remain limited to Git, file inspection, WebFetch, and report orchestration when the report script is not available in the container.
-- For Docker Compose testing, a Compose service name is a valid local `DB_HOST`. The test database suffix and all other 0.2 guards still apply. Never boot the app to discover configuration or use production `.env` values.
+- For Docker Compose testing, a Compose service name is a valid local `DB_HOST`; the database naming convention remains project-defined. Never boot the app to discover configuration or use production `.env` values.
 - At substep B, compare the container PHP version with the Laravel requirement. Tell the user to update/rebuild the image or switch the configured service; never install or switch PHP automatically.
 
 PHP installation or switching is outside the skill's default tool permissions. When PHP does not meet version N's minimum, halt with the required PHP version and project-specific switch instruction. Resume after the user switches PHP and the selected runtime's `php -v` confirms it. Never modify the global PHP installation automatically.
@@ -126,11 +126,12 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
   - Read `phpunit.xml` `<env name="...">` entries. Values there override `.env.testing` at test time, so they win.
   - Effective values = each `phpunit.xml` value if set, else its `.env.testing` value.
   - If `.env.testing` is absent, continue when `phpunit.xml` provides `APP_ENV`, `DB_CONNECTION`, `DB_HOST` (unless SQLite `:memory:`), and `DB_DATABASE`; otherwise halt with `substep: "0.2"`, write state, and report only the missing effective keys.
-- Require `APP_ENV=testing` and one of:
-  - `DB_CONNECTION=sqlite` AND `DB_DATABASE=:memory:`, OR
-  - `DB_CONNECTION` is `mysql`/`pgsql`/other non-SQLite AND `DB_DATABASE` ends in `_test`.
+- Require `APP_ENV=testing` and a complete test database configuration:
+  - SQLite: `DB_CONNECTION=sqlite` and `DB_DATABASE=:memory:` or a clearly test-only local SQLite path.
+  - Other drivers: `DB_CONNECTION` is present, `DB_HOST` is local, and `DB_DATABASE` is present. Do not impose a universal database-name suffix; projects may use `testing`, `test`, a per-developer name, a CI-generated name, or another documented convention.
 - Any missing key, or any value that fails the above: halt with `substep: "0.2"`, write state (see State), report the effective values found, ask the user to fix `.env.testing` or `phpunit.xml`.
-- Host must be local (`DB_HOST` in `127.0.0.1`, `localhost`, or a Docker service name). Halt with `substep: "0.2"` on any other host, and write state.
+- Host must be local (`DB_HOST` in `127.0.0.1`, `localhost`, or a verified Docker/Podman service name). In containerized mode, verify the named service exists in the configured project. Halt with `substep: "0.2"` on any other host, and write state.
+- Record the effective driver, host, and database name plus the isolation basis: `sqlite-memory`, `local-host`, `container-service`, or `per-developer/CI-isolated`. A local host is a safety boundary, not proof that the database is isolated; warn when the database name is shared or isolation cannot be established from files. Never boot the app to infer this.
 - Driver check when effective `DB_DATABASE=:memory:`: grep `database/` for MySQL-only SQL: `AUTO_INCREMENT`, `ENGINE=`, `ALTER TABLE ... CHANGE COLUMN`, `MODIFY COLUMN`, `UNSIGNED`, and `DB::statement`/`DB::unprepared` strings using MySQL syntax. Any match: halt with `substep: "0.2"`, `reason: "sqlite :memory: cannot run MySQL-only migrations"`, `evidence:` every `file:line` match (not just the first). Do not edit migrations: schema change, needs user approval.
   - `next:` either point `.env.testing` at a local `*_test` MySQL/PostgreSQL DB (guard passes), or approve a driver-guarded rewrite of the listed migrations, then re-run from 0.2.
 - Do not read or use production `.env` values.
