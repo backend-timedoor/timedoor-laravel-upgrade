@@ -117,14 +117,15 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - Confirm `composer.lock` `laravel/framework` version matches the `baseline_major` recorded. Mismatch → halt with `substep: "0.1"`.
 - Resolve the runtime under **Docker runtime selection** before running PHP or Composer. In Docker mode, host `php -v` is not evidence; the selected container command must work. Record the runtime metadata and container PHP version.
 - After 0.1 passes, create `upgrade/baseline` with `git checkout -b upgrade/baseline` if absent. Do not create another setup branch. This branch is the resume point for later setup checks.
-- On resume after a 0.2 halt, allow only the expected setup changes: an ignored `.env.testing`, plus an explicitly reviewed `.gitignore` or `.env.testing.example` change. Any other dirty path halts at 0.1.
+- On resume after a 0.2 halt, allow only the expected setup changes: an optional ignored `.env.testing`, plus an explicitly reviewed `phpunit.xml`, `.gitignore`, or `.env.testing.example` change. Any other dirty path halts at 0.1.
 
 **0.2 Test DB guard** (before any test or migrate command)
-- Read `.env.testing`. If missing, halt with `substep: "0.2"`, write state (see State), and ask the user to create it.
-- Parse the test values from files only. Do NOT boot the app (`artisan tinker`, `config:show`), because that loads `.env` (production config).
-  - Read `.env.testing`: `APP_ENV`, `DB_CONNECTION`, `DB_DATABASE`.
+- `.env.testing` is optional when `phpunit.xml` provides every required effective test value. Do not require duplicate configuration.
+- Parse the test values from files only. Do NOT boot the app (`artisan tinker`, `config:show`), because that may load `.env` (production config).
+  - If present, read `.env.testing`: `APP_ENV`, `DB_CONNECTION`, `DB_HOST`, `DB_DATABASE`.
   - Read `phpunit.xml` `<env name="...">` entries. Values there override `.env.testing` at test time, so they win.
-  - Effective values = `phpunit.xml` if set, else `.env.testing`.
+  - Effective values = each `phpunit.xml` value if set, else its `.env.testing` value.
+  - If `.env.testing` is absent, continue when `phpunit.xml` provides `APP_ENV`, `DB_CONNECTION`, `DB_HOST` (unless SQLite `:memory:`), and `DB_DATABASE`; otherwise halt with `substep: "0.2"`, write state, and report only the missing effective keys.
 - Require `APP_ENV=testing` and one of:
   - `DB_CONNECTION=sqlite` AND `DB_DATABASE=:memory:`, OR
   - `DB_CONNECTION` is `mysql`/`pgsql`/other non-SQLite AND `DB_DATABASE` ends in `_test`.
@@ -136,7 +137,7 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 
 **0.3 Baseline**
 - Continue on `upgrade/baseline`; do not create `upgrade/setup`.
-- Keep `.env.testing` ignored and uncommitted. If `.gitignore` or `.env.testing.example` changed during setup, stage only the reviewed file(s), apply the commit gate, show the staged diff, and ask for explicit user approval before committing the baseline setup change.
+- Keep `.env.testing`, when present, ignored and uncommitted. If `phpunit.xml`, `.gitignore`, or `.env.testing.example` changed during setup, stage only the reviewed file(s), apply the commit gate, show the staged diff, and ask for explicit user approval before committing the baseline setup change.
 - Run the test suite. If it fails, halt with counts. Store the passing test count in `state.json` as `test_count` and the PHP binary used as `php_binary`.
 - If `.gitignore` ignores `docs/` or `/docs`, delete only that line. Stage that exact change, apply the commit gate, then commit it on `upgrade/baseline` as `chore(upgrade): track docs/upgrade`. This and the baseline snapshot are the only allowed baseline commits. Log the change.
 - Save: `php artisan route:list --json > docs/upgrade/baseline/routes.json`, `composer show --format=json > docs/upgrade/baseline/packages.json`, `composer audit --format=json > docs/upgrade/baseline/audit.json` (pre-existing advisories; the gate compares against this file). Capture framework info in `about.txt`: run `php artisan about > docs/upgrade/baseline/about.txt` on Laravel 8+, or `php artisan --version > docs/upgrade/baseline/about.txt` when `about` is unavailable on Laravel 6–7. Record any other command failure and halt.
