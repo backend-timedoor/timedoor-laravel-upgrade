@@ -168,6 +168,52 @@ def replace_generated(text, body):
     return text.rstrip() + "\n\n" + block + "\n"
 
 
+def decision_row(package):
+    options = ["fork", "rebuild", "skip"]
+    if package.get("migration_pending"):
+        options.append("migrate")
+    if package.get("replaced_by"):
+        options.append("replace")
+    if package.get("abandoned") and package.get("replaced_by"):
+        options = [option for option in options if option not in {"fork", "rebuild"}]
+    if package.get("abandoned") and package.get("replaced_by"):
+        suggested = "replace"
+    elif package.get("migration_pending"):
+        suggested = "migrate"
+    elif package.get("risk") == "high":
+        suggested = "fork"
+    else:
+        suggested = "skip"
+    problem = "Abandoned; replacement available" if package.get("abandoned") and package.get("replaced_by") else "No release for target Laravel version"
+    files_touched = package.get("files_touched", [])
+    count = len(files_touched) if isinstance(files_touched, list) else files_touched
+    evidence = f"{count} files touched ({package.get('risk', 'unknown')} risk)."
+    if package.get("migration_pending"):
+        evidence += " Migration pending."
+    return package.get("name", "unknown"), problem, evidence, ", ".join(options), suggested
+
+
+def decision_output(state):
+    halt = state.get("halt") or {}
+    status = state.get("status", "unknown")
+    version = halt.get("version")
+    substep = halt.get("substep")
+    version_line = "before upgrade loop" if version is None else f"Laravel {version} → PHP {state.get('php_current', 'unknown')} (substep {substep})"
+    lines = [f"Status: {status}", f"Reason: {halt.get('reason', 'Upgrade completed.')}", version_line]
+    packages = state.get("incompatible_packages", [])
+    if packages:
+        resolved = state.get("resolved_packages", [])
+        if resolved:
+            lines += ["", "Auto-resolved packages: " + ", ".join(package.get("name", "unknown") for package in resolved)]
+        lines += ["", "Packages needing a decision:", "", "| Package | Problem | Evidence | Options | Suggested |", "|---|---|---|---|---|"]
+        lines += ["| " + " | ".join(decision_row(package)) + " |" for package in packages]
+        lines += ["", "To resume:"]
+        lines += [f"{package.get('name', 'unknown')} → [your choice: {decision_row(package)[3].replace(', ', ' | ')}]" for package in packages]
+    else:
+        lines += ["", f"Next: {halt.get('next', 'Review docs/upgrade/REPORT.md.')}"]
+    return "\n".join(lines) + "\n"
+
+
 def run_version(v):
     doc = UP / f"{v}-laravel-{v}.md"
     doc.parent.mkdir(parents=True, exist_ok=True)
@@ -209,7 +255,9 @@ def run_final():
             f"- `{f.get('command')}` exit {f.get('exit_code')}" for f in stats["failures"]))
     parts.append("\n## Rollback\nCreate a new branch from `upgrade/baseline`. Do not reset or force-push existing branches.")
     (UP / "REPORT.md").write_text("\n".join(p for p in parts if p) + "\n")
-    print("wrote docs/upgrade/REPORT.md")
+    decision = decision_output(state)
+    (UP / "DECISION.md").write_text(decision)
+    print(decision, end="")
 
 
 def main():

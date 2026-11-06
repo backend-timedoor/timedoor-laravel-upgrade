@@ -293,7 +293,7 @@ Skill never auto-migrates without user decision. At the start of each version lo
 
 ## Mapping to decision output
 
-When building halt output, transform `state.json incompatible_packages` to the readable decision table as follows. When invoked with `--output-format json`, the CLI wraps this same readable text in its normal JSON result; do not invent a second skill-specific JSON schema.
+`make_report.py --final` transforms `state.json incompatible_packages` into the readable decision table below and writes it to `docs/upgrade/DECISION.md`, then prints the same text to stdout. Treat that file and stdout as the canonical output. Do not manually reconstruct a second skill-specific JSON or text schema.
 
 | State field | Output field | Logic |
 |------------|-------------|-------|
@@ -366,11 +366,11 @@ Halt on any of:
 - Unexpected route removal/change not in the guide.
 - Any non-zero exit from `git` or `composer` not listed as expected.
 
-On halt: write `state.json` `halt` object, run `make_report.py --final` (marked halted), generate decision output (see "Decision output"), stop. Do not try alternative commands to bypass a halt.
+On halt: write `state.json` `halt` object, run `make_report.py --final` (marked halted), then `Read docs/upgrade/DECISION.md` and return its contents verbatim as the final chat reply to the user. `make_report.py` is the canonical decision formatter; do not manually reconstruct the table. Never stop after writing only `state.json` or `REPORT.md`. Do not try alternative commands to bypass a halt.
 
 ## Decision output
 
-When the skill halts or is done, output status and recommendations as readable text plus a resume template. Apply whether the skill halted itself or the user stopped it.
+When the skill halts or is done, `make_report.py --final` writes the canonical readable output to `docs/upgrade/DECISION.md` and prints it to stdout. Read that file and return it verbatim as the final chat reply. Apply whether the skill halted itself or the user stopped it.
 
 Format:
 
