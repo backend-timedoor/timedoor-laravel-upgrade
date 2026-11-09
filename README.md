@@ -47,7 +47,7 @@ Output: `docs/upgrade/` (per-version docs, `state.json`, `command-log.jsonl`, `R
 ## Safety
 
 - No push, no remote changes, no merge to main.
-- Test DB guard before any migrate/test, including a preflight scan that halts SQLite `:memory:` when migrations contain MySQL-only SQL (`AUTO_INCREMENT`, `ALTER TABLE ... CHANGE COLUMN`, etc.). No automatic migration rewrite.
+- Test DB guard before PHPUnit, including a preflight scan that halts SQLite `:memory:` when migrations contain MySQL-only SQL (`AUTO_INCREMENT`, `ALTER TABLE ... CHANGE COLUMN`, etc.). Never invoke Artisan migrations directly: missing `.env.testing` can make `--env=testing` fall back to `.env`. No automatic migration rewrite.
 - Never changes business logic automatically.
 - Uses Composer's local dependency solver first, then fetches full Packagist metadata only for blocking packages.
 - Collects all incompatible packages in one preflight report, classifies risk, then halts for a per-package decision.

@@ -42,13 +42,13 @@ Bash(git status:*) Bash(git log:*) Bash(git diff:*) Bash(git rev-parse:*)
 Bash(git checkout -b:*) Bash(git switch:*) Bash(git branch:*) Bash(git add:*) Bash(git commit:*)
 Bash(composer show:*) Bash(composer require:*) Bash(composer update:*) Bash(composer audit:*) Bash(composer outdated:*) Bash(composer prohibits:*) Bash(composer validate:*)
 Bash(docker compose config:*) Bash(docker compose ps:*)
-Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php artisan migrate --env=testing:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*) Bash(vendor/bin/sail:*)
+Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*) Bash(vendor/bin/sail:*)
 Bash(docker compose exec:* php:*) Bash(docker compose exec:* composer:*) Bash(docker compose exec:* vendor/bin/phpstan:*) Bash(docker compose exec:* vendor/bin/rector:*) Bash(docker compose exec:* php vendor/bin/phpunit:*) Bash(docker compose exec:* python3:*)
 Bash(python3 *scripts/make_report.py:*)
 WebFetch(domain:laravel.com) WebFetch(domain:packagist.org)
 ```
 
-Only `php artisan migrate --env=testing` is permitted, and only after the test DB guard passes. If an official guide or approved package migration requires another command, halt and ask the user to run it manually. `migrate:fresh`, `db:wipe`, and `migrate:reset` remain forbidden.
+All Artisan migration commands are forbidden, including `migrate --env=testing`, `migrate:fresh`, `db:wipe`, and `migrate:reset`. If an official guide or approved package migration requires an Artisan command, halt and ask the user to run it manually. Missing `.env.testing` makes `--env=testing` fall back to `.env` (may hit prod/dev DB). Migrations only via PHPUnit traits, after the test DB guard passes.
 
 ### Docker runtime selection
 
@@ -119,7 +119,7 @@ Log every shell command and exit code to `docs/upgrade/command-log.jsonl`, one J
 - After 0.1 passes, create `upgrade/baseline` with `git checkout -b upgrade/baseline` if absent. Do not create another setup branch. This branch is the resume point for later setup checks.
 - On resume after a 0.2 halt, allow only the expected setup changes: an optional ignored `.env.testing`, plus an explicitly reviewed `phpunit.xml`, `.gitignore`, or `.env.testing.example` change. Any other dirty path halts at 0.1.
 
-**0.2 Test DB guard** (before any test or migrate command)
+**0.2 Test DB guard** (before any test command)
 - `.env.testing` is optional when `phpunit.xml` provides every required effective test value. Do not require duplicate configuration.
 - Parse the test values from files only. Do NOT boot the app (`artisan tinker`, `config:show`), because that may load `.env` (production config).
   - If present, read `.env.testing`: `APP_ENV`, `DB_CONNECTION`, `DB_HOST`, `DB_DATABASE`.
