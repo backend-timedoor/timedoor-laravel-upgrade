@@ -233,14 +233,18 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 ### H. Document
 - Fill `docs/upgrade/N-laravel-N.md` from the template below.
 - Run `PHP_BINARY=<php-binary> python3 <skill-base-dir>/scripts/make_report.py --version N`. `<skill-base-dir>` is the "Base directory for this skill" shown when this skill loads. The script runs from the app root and writes to `docs/upgrade/`. It writes the file tables from git and logs. You fill only the narrative fields (`Summary notes`, `Manual review`).
-- After the test and route verification gates pass, update state and generate the report. Stage only intended files, review the cached diff, ask user approval, then commit `upgrade(laravel-N): Laravel N verified`.
+- After the test and route verification gates pass, fill the version doc, update state, and generate the version report. Stage only intended files, review the cached diff, ask user approval, then commit `upgrade(laravel-N): Laravel N verified`. After the commit, execute I and J immediately; a successful version commit is not a valid stopping point.
 
 ### I. Finish version
+- Runs immediately after the `upgrade(laravel-N): Laravel N verified` commit. Do not generate the final report or end the turn before I and J finish.
 - Before marking passed: `composer show laravel/framework` must report major N. Mismatch → halt.
-- Set `versions[N].status = "passed"`, `commit`, and advance `current_version`.
+- Set `versions[N].status = "passed"`, `versions[N].commit = <sha>`, and set `current_version = N + 1`. Write `state.json` before continuing.
 
-### J. Stop check
-- If `current_version > 13`: set `status = "done"`, run `PHP_BINARY=<php-binary> python3 <skill-base-dir>/scripts/make_report.py --final`. Else continue loop.
+### J. Stop check (mandatory after every version, including the last)
+- Runs after I, in the same turn, every time a version passes. Never skip it, never jump to the report.
+- If `current_version > 13`: set `status = "done"`, run `PHP_BINARY=<php-binary> python3 <skill-base-dir>/scripts/make_report.py --final`, then return DECISION output. Done.
+- Else: the loop is not finished. Go directly to substep A for `current_version` (N+1). Do not write `REPORT.md`, do not run `--final`, do not return to the user until the loop reaches `done` or `halted`.
+- Check state after J: `current_version` must equal the version just passed + 1. If it does not, halt with `substep: "J"`.
 
 ## Incompatible packages (state.json, section 0.4)
 
