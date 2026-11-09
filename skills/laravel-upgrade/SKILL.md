@@ -280,7 +280,9 @@ Decision required (halt, user decides per package):
 - Package with `migration_pending: true`.
 - New `composer audit` advisory not in `docs/upgrade/baseline/audit.json`.
 
-User decides. Actions:
+User decides. Record every user-selected decision in `state.json` under `resolved_packages` with `name`, `action`, `action_package` when applicable, `until_version` for time-bounded actions, and `notes`. Also record the decision, compatibility evidence, affected files/features, and before/after test results in the relevant version doc. The final report and `DECISION.md` are generated from state and logs; never edit them manually.
+
+Actions:
 - **fork:** Maintain a local fork or abandoned version. Skill resumes after you document it in `composer.json`.
 - **rebuild:** Replace the package with in-app code. Triggers rule 10: characterization tests before, rerun after change. High risk; requires explicit commitment to maintain the replacement. Skill resumes after you confirm the rebuild is complete and tested.
 - **migrate:** Only if `migration_pending: true`. Skill applies the migration on next run (substep F).
