@@ -178,7 +178,7 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Guides are not fetched or merged here; they are fetched on-demand when upgrading to each version (substep C).
 
 **0.5 Dev tools**
-- Attempt to install `larastan/larastan`, `rector/rector`, `driftingly/rector-laravel` as dev dependencies only if absent. Record in the command log. Do not change tool config that already exists.
+- Attempt to install `larastan/larastan`, `rector/rector`, `driftingly/rector-laravel` as dev dependencies only if absent. Before each install, run the equivalent `composer require ... --dry-run`, save output to `docs/upgrade/logs/dry-run-0.5-<safe-name>.txt`, and halt on unexpected removals, unrelated major bumps, or conflicts. If clean, run the real `composer require`. Record both commands in the command log. Do not change tool config that already exists.
 - If any tool fails to install due to dependency conflicts with the baseline Laravel version (e.g., larastan requires SemVer ^3.0 but Laravel 7 locks ^1.5), do not block: skip them in section 0.5 and install per-version during each version's substep G.1 (static analysis). Log the conflict and reason for deferral.
 - If the tool installs, continue. If it fails for another reason (not a SemVer/dep conflict), halt with the error and ask the user to resolve it manually.
 
@@ -200,12 +200,12 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 ### D. Packages
 - Determine the PHP minimum for N from the current guide. Run `composer prohibits laravel/framework ^N.0 --recursive` and `composer prohibits php ^<php_min>`; save output to `docs/upgrade/logs/prohibits-N.txt`. Fetch `https://repo.packagist.org/p2/<vendor>/<package>.json` through `WebFetch(domain:packagist.org)` only for direct packages listed there; evaluate all releases compatible with both Laravel N and that PHP version. Do not rely on the latest-release page or reuse the 0.4 result without re-checking.
 - `composer outdated --direct --format=json`.
-- For each direct package needing change for N (upgrade or downgrade to the release that supports N and the PHP minimum): `composer require vendor/pkg:^X -W` (one at a time). No confirmation needed. Keep `composer.json` and `composer.lock` unstaged until the test and verification gates pass.
+- For each direct package needing change for N (upgrade or downgrade to the release that supports N and the PHP minimum): first run `composer require vendor/pkg:^X -W --dry-run`, save output to `docs/upgrade/logs/dry-run-N-<safe-name>.txt`, and confirm only the intended package (and its expected transitive deps) would change. Unexpected removals, unrelated major bumps, or conflicts found in the dry run halt before the real command runs. If clean, run `composer require vendor/pkg:^X -W` (one at a time). No confirmation needed beyond the dry-run check. Keep `composer.json` and `composer.lock` unstaged until the test and verification gates pass.
 - If a direct package has no compatible release for Laravel N, halt before changing dependencies. Record the package, compatibility evidence, and suggested action in `state.json` and the version doc. Offer only the actions produced by the Mapping to decision output table.
 - `composer audit` must not report new advisories. If it does, record them and halt unless the user approved.
 
 ### E. Framework
-- Set `laravel/framework` to `^N.0` in `composer.json`. Run `composer update laravel/framework -W`.
+- Set `laravel/framework` to `^N.0` in `composer.json`. First run `composer update laravel/framework -W --dry-run`, save output to `docs/upgrade/logs/dry-run-N-framework.txt`, and confirm only the framework and expected transitive dependencies would change. Unexpected removals, unrelated major bumps, or conflicts halt before the real update. If clean, run `composer update laravel/framework -W`.
 - Keep framework changes unstaged until the test and verification gates pass.
 
 ### F. Guide-driven file changes
