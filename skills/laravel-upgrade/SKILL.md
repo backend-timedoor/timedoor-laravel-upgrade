@@ -49,7 +49,7 @@ Bash(python3 *scripts/make_report.py:*)
 WebFetch(domain:laravel.com) WebFetch(domain:packagist.org)
 ```
 
-All Artisan migration commands are forbidden, including `migrate --env=testing`, `migrate:fresh`, `db:wipe`, and `migrate:reset`. If an official guide or approved package migration requires an Artisan command, halt and ask the user to run it manually. Missing `.env.testing` makes `--env=testing` fall back to `.env` (may hit prod/dev DB). Migrations only via PHPUnit traits, after the test DB guard passes.
+All Artisan migration commands are forbidden, including `migrate --env=testing`, `migrate:fresh`, `db:wipe`, and `migrate:reset`. If an official guide or approved package migration requires an Artisan command, halt and ask the user to run it manually. If PHPUnit tests need a migrated schema but no `RefreshDatabase`/`DatabaseMigrations` trait exists, halt and ask the user to provision the test DB; do not run migrations. Missing `.env.testing` makes `--env=testing` fall back to `.env` (may hit prod/dev DB). Migrations only via PHPUnit traits, after the test DB guard passes.
 
 ### Docker runtime selection
 
@@ -194,7 +194,7 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 ### C. Fetch and read the guide
 - Fetch only `https://laravel.com/docs/N.x/upgrade` for the current N. Retry once on failure; a second failure halts at substep `C`.
 - Save only the current guide to `docs/upgrade/guides/N.md`; do not fetch or save guides for later versions until their upgrade loop begins.
-- **Write gate:** the guide must exist on disk before anything else in this substep. Verify with `Read docs/upgrade/guides/N.md`; it must be non-empty and contain the guide's "Breaking Changes" section. Missing or empty file: halt at `C` (reason: "guide not saved"). Do not continue from the fetch result alone, and do not proceed to D on memory of the guide.
+- **Write gate:** the guide must exist on disk before anything else in this substep. Verify with `Read docs/upgrade/guides/N.md`; it must be non-empty and contain breaking-change content (a "Breaking Changes" section or categorized "High/Medium/Low Impact Changes" sections). Missing or empty file: halt at `C` (reason: "guide not saved"). Do not continue from the fetch result alone, and do not proceed to D on memory of the guide.
 - Read `docs/upgrade/guides/N.md`. Build a checklist of "Breaking Changes" and required file changes in `docs/upgrade/N-laravel-N.md` under "Official guide checklist". Mark each item `applies` or `n/a` with a reason. Each item cites its guide section heading.
 
 ### D. Packages
@@ -291,7 +291,7 @@ User decides. Record every user-selected decision in `state.json` under `resolve
 Actions:
 - **fork:** Maintain a local fork or abandoned version. Skill resumes after you document it in `composer.json`.
 - **rebuild:** Replace the package with in-app code. Triggers rule 10: characterization tests before, rerun after change. High risk; requires explicit commitment to maintain the replacement. Skill resumes after you confirm the rebuild is complete and tested.
-- **migrate:** Only if `migration_pending: true`. Skill applies the migration on next run (substep F).
+- **migrate:** Only if `migration_pending: true`. Skill halts and asks the user to run the package migration manually (Artisan migrations are forbidden, see ALLOWED_TOOLS), then resumes after confirmation.
 - **skip:** Accept incompatibility for this version and all future versions. Skill records in report and continues.
 - **replace:** Switch to `action_package` in `composer.json` for this version and all future versions. Skill resumes.
 - **skip_until:** Accept incompatibility through version N, inclusive. Set `until_version: N` in `state.json`; re-check when entering N+1.
