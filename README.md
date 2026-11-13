@@ -29,6 +29,7 @@ Output: `docs/upgrade/` (per-version docs, `state.json`, `command-log.jsonl`, `R
 ## Requirements
 
 - git, PHP CLI, Composer
+- Node + npm/pnpm/yarn, only if the project has a `package.json` with a build script (never installed or switched by the skill)
 - PHPUnit/Pest test suite
 - `.env.testing` and `phpunit.xml` both present and configured:
   - `APP_ENV=testing`
@@ -52,6 +53,7 @@ Output: `docs/upgrade/` (per-version docs, `state.json`, `command-log.jsonl`, `R
 - Uses Composer's local dependency solver first, then fetches full Packagist metadata only for blocking packages.
 - Collects all incompatible packages in one preflight report, classifies risk, then halts for a per-package decision.
 - Supports `fork`, `rebuild`, `migrate` (user runs the migration manually), `skip`, `replace`, `skip_until`, or `replace_until`; records each decision in `state.json`.
+- Frontend: keeps Mix on Laravel < 9; Mix → Vite only on Laravel ≥ 9.19 and only when you ask. Runs the asset build as a gate. Never commits build output, never edits `.env`.
 - Halts on unexpected route changes and test regressions after 2 retries.
 
 ## Before publishing
