@@ -11,7 +11,7 @@
       "name": "laravel-upgrade",
       "source": "./",
       "description": "Automated Laravel 6→13 and PHP→8.4 upgrade with per-version reports",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "category": "migration"
     }
   ]
