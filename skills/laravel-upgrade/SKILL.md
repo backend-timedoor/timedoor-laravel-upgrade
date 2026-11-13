@@ -45,6 +45,7 @@ Bash(composer show:*) Bash(composer require:*) Bash(composer update:*) Bash(comp
 Bash(docker compose config:*) Bash(docker compose ps:*)
 Bash(php -v:*) Bash(php artisan test:*) Bash(php artisan route:list:*) Bash(php artisan about:*) Bash(php artisan --version:*) Bash(php vendor/bin/phpunit:*) Bash(vendor/bin/phpstan:*) Bash(vendor/bin/rector:*) Bash(vendor/bin/sail:*)
 Bash(docker compose exec:* php:*) Bash(docker compose exec:* composer:*) Bash(docker compose exec:* vendor/bin/phpstan:*) Bash(docker compose exec:* vendor/bin/rector:*) Bash(docker compose exec:* php vendor/bin/phpunit:*) Bash(docker compose exec:* python3:*)
+Bash(node -v:*) Bash(npm ci:*) Bash(npm install:*) Bash(npm run build:*) Bash(pnpm install:*) Bash(pnpm run build:*) Bash(yarn install:*) Bash(yarn build:*) Bash(npm run prod:*) Bash(npm run production:*) Bash(pnpm run prod:*) Bash(pnpm run production:*) Bash(yarn prod:*) Bash(yarn production:*)
 Bash(python3 *scripts/make_report.py:*)
 WebFetch(domain:laravel.com) WebFetch(domain:packagist.org)
 ```
@@ -214,6 +215,21 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 - Each file changed: note in the doc with reason and "business logic touched: no".
 - Keep guide changes unstaged until the test and verification gates pass.
 - If a required change needs logic changes, record under "Needs manual review" and do not edit.
+- **Frontend stack** (only when `package.json` exists): in scope only when the guide or target skeleton requires it, or the user asked. Never infer a frontend migration from a backend upgrade alone.
+  - Inspect `package.json`, the lockfile (this picks the package manager: `package-lock.json` → npm, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn), `webpack.mix.js`, `vite.config.*`, `resources/js`, `resources/css`.
+  - Pick stack by what the project uses, not by N: `webpack.mix.js` → Mix, `vite.config.*` → Vite. Laravel 6–8 skeletons ship Mix; Vite needs Laravel 9.19.0+. For N < 9, stay on Mix: never migrate to Vite. Only bump `laravel-mix` when the guide or a build failure requires it.
+  - Mix → Vite: allowed only for N ≥ 9 with framework ≥ 9.19.0, and only when the user asked (the guide does not require it). Follow official Laravel Vite docs for N. Steps, in order:
+    1. Remove `laravel-mix`; install `vite` and `laravel-vite-plugin` (plus `@vitejs/plugin-vue` / `@vitejs/plugin-react` if the project uses Vue/React).
+    2. Create `vite.config.js` with entry points taken from `webpack.mix.js` (e.g. `resources/js/app.js`).
+    3. Scripts in `package.json`: `dev` → `vite`, `build` → `vite build`.
+    4. `require()` → ES `import` in the entry files only.
+    5. `MIX_*` env vars → `VITE_*`; `process.env.MIX_*` → `import.meta.env.VITE_*`. Edit `.env.example` too; list `.env` changes under "Needs manual review", never edit `.env`.
+    6. Blade: `mix('path')` → `@vite(['path'])`.
+    7. Delete `webpack.mix.js` and Mix-only config/copy tasks last, after the build gate passes. Copy tasks with no Vite equivalent → "Needs manual review".
+    Never rewrite project JS/CSS, components, or views beyond these steps. Keep project customizations. Same rules apply to Vite major bumps.
+  - Run frontend commands in the same runtime as PHP (Docker service when Docker indicators exist, else host). Check `node -v` against the Node requirement of the target toolchain; if too old, halt and tell the user. Never install or switch Node.
+  - Migration needing a choice (Mix vs Vite, framework preset) or changing UI behavior: record under "Needs manual review", do not edit.
+  - Never commit build output (`public/build`, `public/js`, `public/css`) unless the project already tracks it.
 
 ### G. Scan, fix, test
 1. Static analysis:
@@ -231,6 +247,7 @@ Use `Agent` only for independent read/fetch work. Launch the fan-out agents in o
 4. Verification diff. No commit is allowed until this passes:
    - `php artisan route:list --json` → compare with `docs/upgrade/baseline/routes.json`.
    - Every removed or changed route must match an entry in the guide checklist or be listed under "Needs manual review". Otherwise halt.
+5. Asset build gate. Build script: Vite → `build`; Mix → `production` (else `prod`). Skip (record "n/a: no build script") when none exists. Otherwise run the lockfile's package manager: install (`npm ci` / `pnpm install --frozen-lockfile` / `yarn install --frozen-lockfile`; plain `npm install` only if frontend dependencies changed in F), then `<pm> run <script> > docs/upgrade/logs/build-N.txt`. Old Mix (6–8) may fail on modern Node (e.g. `node-sass`); if so halt and report the Node/toolchain mismatch, never switch Node. Failure counts toward retries like step 3. Record command, exit code, and result in the version doc under "Changes".
 
 ### H. Document
 - Fill `docs/upgrade/N-laravel-N.md` from the template below. Precondition: `docs/upgrade/guides/N.md` exists and the "Official guide checklist" section is filled. If either is missing, halt at `C`; do not commit.
